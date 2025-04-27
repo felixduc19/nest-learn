@@ -5,13 +5,14 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { PasswordService } from 'src/shared/services/password.service';
 import { RedisService } from '../redis/redis.service';
+import { MailService } from '../mail/mail.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
   ],
   controllers: [UsersController],
-  providers: [UsersService, PasswordService, RedisService],
+  providers: [UsersService, PasswordService, RedisService, MailService],
   exports: [UsersService],
 })
 export class UsersModule {}

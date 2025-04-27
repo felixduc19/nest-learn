@@ -9,6 +9,7 @@ import { LocalStrategy } from '../passport/local.strategy';
 import { JwtStrategy } from '../passport/jwt.strategy';
 import { RedisModule } from 'src/modules/redis/redis.module';
 import { RedisService } from '../redis/redis.service';
+import { MailService } from '../mail/mail.service';
 
 @Module({
   imports: [
@@ -24,6 +25,12 @@ import { RedisService } from '../redis/redis.service';
     RedisModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtStrategy, RedisService],
+  providers: [
+    AuthService,
+    LocalStrategy,
+    JwtStrategy,
+    RedisService,
+    MailService,
+  ],
 })
 export class AuthModule {}

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 
 import { Model } from 'mongoose';
@@ -9,6 +13,7 @@ import { UpdateUserDtoType } from './dto/update-user.dto';
 import { User } from './schemas/user.schema';
 import { TransformUserDtoSchema } from './dto/user.dto';
 import { RedisService } from '../redis/redis.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UsersService {
@@ -16,6 +21,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly redisService: RedisService,
     private readonly passwordService: PasswordService,
+    private readonly mailService: MailService,
   ) {}
 
   async isEmailTaken(email: string): Promise<boolean> {
@@ -45,12 +51,12 @@ export class UsersService {
     if (isTaken) {
       throw new ConflictException('Email already taken');
     }
-    // const hashedPassword = await this.passwordService.hash(
-    //   createUserDto.password,
-    // );
+    const hashedPassword = await this.passwordService.hash(
+      createUserDto.password,
+    );
     const createdUser = await this.userModel.create({
       ...createUserDto,
-      // password: hashedPassword,
+      password: hashedPassword,
     });
 
     return createdUser;
@@ -61,10 +67,16 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    const user = await this.userModel.findById(id);
+    const user = await this.userModel.findById(id).select('+password').lean();
     if (!user) {
-      throw new ConflictException('User not found');
+      throw new NotFoundException('User not found');
     }
+    return user;
+  }
+
+  async getUserById(id: string) {
+    const user = await this.findById(id);
+
     return TransformUserDtoSchema.parse(user);
   }
 
@@ -77,7 +89,7 @@ export class UsersService {
       .findByIdAndUpdate(id, { $set: updateUserDto }, { new: true })
       .lean();
     if (!updatedUser) {
-      throw new ConflictException('User not found');
+      throw new NotFoundException('User not found');
     }
 
     return updatedUser;
@@ -86,7 +98,7 @@ export class UsersService {
   async remove(id: string) {
     const removingUser = await this.userModel.findByIdAndDelete(id).lean();
     if (!removingUser) {
-      throw new ConflictException('User not found');
+      throw new NotFoundException('User not found');
     }
 
     return {
@@ -97,7 +109,7 @@ export class UsersService {
   async activateUser(email: string) {
     const user = await this.userModel.findOne({ email });
     if (!user) {
-      throw new ConflictException('User not found');
+      throw new NotFoundException('User not found');
     }
 
     user.isActive = true;
@@ -110,8 +122,46 @@ export class UsersService {
     if (existedOTP) {
       await this.redisService.delete(`otp:${email}`);
     }
-    const otp = Math.floor(100000 + Math.random() * 900000);
-    await this.redisService.set(`otp:${email}`, otp.toString());
-    console.log('OTP:', otp);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await this.redisService.set(`otp:${email}`, otp);
+    return otp;
+  }
+
+  async updatePassword(id: string, newPassword: string) {
+    // const user = await this.findById(id);
+
+    // console.log('user', user);
+
+    // const isMatch = await this.passwordService.compare(
+    //   oldPassword,
+    //   user.password,
+    // );
+    // if (!isMatch) {
+    //   throw new ConflictException('Old password is incorrect');
+    // }
+    // if (oldPassword === newPassword) {
+    //   throw new ConflictException('New password must be different');
+    // }
+
+    const hashedPassword = await this.passwordService.hash(newPassword);
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { password: hashedPassword } },
+        { new: true },
+      )
+      .lean();
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.mailService.sendConfirmPasswordUpdated(
+      updatedUser.name,
+      updatedUser.email,
+    );
+
+    return {
+      message: 'Password updated successfully',
+    };
   }
 }
