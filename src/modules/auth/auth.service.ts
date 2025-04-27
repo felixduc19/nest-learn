@@ -48,7 +48,6 @@ export class AuthService {
 
   async isTokenBlacklisted(token: string): Promise<boolean> {
     const result = await this.redisService.get(`blacklist:${token}`);
-    console.log('result', result);
     return result === '1';
   }
 
@@ -76,7 +75,6 @@ export class AuthService {
   }
 
   async login(user: JwtPayloadCustom) {
-    console.log('user', user);
     const payload = {
       id: user.id,
       email: user.email,
